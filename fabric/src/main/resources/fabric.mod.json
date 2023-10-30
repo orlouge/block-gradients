@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "blockgradients",
+  "version": "${version}",
+  "name": "Block Gradients",
+  "description": "This is an example description! Tell everyone what your mod is about!",
+  "authors": [
+    "orlouge"
+  ],
+  "contact": {
+    "homepage": "https://fabricmc.net/",
+    "sources": "https://github.com/FabricMC/fabric-example-mod"
+  },
+  "license": "Insert License Here",
+  "icon": "assets/examplemod/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "io.github.orlouge.blockgradients.fabric.BlockGradientsClientMod"
+    ]
+  },
+  "mixins": [
+    "blockgradients.mixins.json",
+    "blockgradients-common.mixins.json"
+  ],
+  "depends": {
+    "fabric": "*",
+    "minecraft": ">=1.20"
+  }
+}
