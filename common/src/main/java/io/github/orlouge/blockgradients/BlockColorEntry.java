@@ -1,10 +1,12 @@
 package io.github.orlouge.blockgradients;
 
+import io.github.orlouge.blockgradients.mixin.SpriteContentsAccessor;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.texture.AbstractTexture;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.client.texture.SpriteContents;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
@@ -13,39 +15,70 @@ import java.util.*;
 
 public class BlockColorEntry {
     public int id = -1;
-    private Vec3d dominant, average, stddev;
+    private final Vec3d dominant, average, stddev, median;
     public final boolean hasDominant;
     private final Map<Block, Set<Direction>> blocks =
             new TreeMap<>(Comparator.comparing(block -> block.getName().getString().length()));
-    private final List<NativeImageBackedTexture> textures;
-    private static final int DOMINANT_PERCENTAGE = 80, DOMINANT_MAXDIFF = 25000;
+    private final List<AbstractTexture> textures;
+    private final List<SpriteContents> sprites;
 
-    public BlockColorEntry(Block block, NativeImage image, Direction direction) {
+    public BlockColorEntry(Block block, SpriteContents spriteContents, Direction direction) {
         this.blocks.put(block, direction != null ? new TreeSet<>(List.of(direction)) : null);
+        this.sprites = new ArrayList<>(List.of(spriteContents));
+        NativeImage image = ((SpriteContentsAccessor) spriteContents).getMipmapLevelsImages()[0];
         this.textures = new ArrayList<>(List.of(new NativeImageBackedTexture(image)));
-        int width = image.getWidth(), height = image.getHeight(), dominantCount = 0;
+        int width = image.getWidth(), height = image.getHeight();
+        int[] histoR = new int[256], histoG = new int[256], histoB = new int[256];
 
-        int avgR = 0, avgG = 0, avgB = 0, domR = 0, domG = 0, domB = 0;
+        int avgR = 0, avgG = 0, avgB = 0, medianR = 127, medianG = 127, medianB = 127;
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int r = image.getRed(x, y), g = image.getGreen(x, y), b = image.getBlue(x, y);
-                avgR += r >= 0 ? r : 256 + r;
-                avgG += g >= 0 ? g : 256 + g;
-                avgB += b >= 0 ? b : 256 + b;
+                r = r >= 0 ? r : 256 + r;
+                g = g >= 0 ? g : 256 + g;
+                b = b >= 0 ? b : 256 + b;
+                avgR += r;
+                avgG += g;
+                avgB += b;
+                histoR[r] += 1;
+                histoG[g] += 1;
+                histoB[b] += 1;
             }
         }
 
-        double averageR = (double) avgR / ((double) (width * height));
-        double averageG = (double) avgG / ((double) (width * height));
-        double averageB = (double) avgB / ((double) (width * height));
-        avgR = (int) averageR;
-        avgG = (int) averageG;
-        avgB = (int) averageB;
-        averageR /= 255d;
-        averageG /= 255d;
-        averageB /= 255d;
-        this.average = new Vec3d(averageR, averageG, averageB);
+        int k = (width * height) / 2, total = 0;
+        for (int i = 0; i < 256; i++) {
+            total += histoR[i];
+            if (total > k) {
+                medianR = i;
+                break;
+            }
+        }
+        total = 0;
+        for (int i = 0; i < 256; i++) {
+            total += histoG[i];
+            if (total > k) {
+                medianG = i;
+                break;
+            }
+        }
+        total = 0;
+        for (int i = 0; i < 256; i++) {
+            total += histoB[i];
+            if (total > k) {
+                medianB = i;
+                break;
+            }
+        }
+
+
+        this.average = new Vec3d(
+                (double) avgR / ((double) (width * height * 255)),
+                (double) avgG / ((double) (width * height * 255)),
+                (double) avgB / ((double) (width * height * 255))
+        );
+        this.median = new Vec3d(medianR / 255d, medianG / 255d, medianB / 255d);
 
         int stdR = 0, stdG = 0, stdB = 0;
 
@@ -55,19 +88,10 @@ public class BlockColorEntry {
                 r = r >= 0 ? r : 256 + r;
                 g = g >= 0 ? g : 256 + g;
                 b = b >= 0 ? b : 256 + b;
-                int rd = (r - avgR) * (r - avgR), gd = (g - avgG) * (g - avgG), bd = (b - avgB) * (b - avgB);
+                int rd = (r - medianR) * (r - medianR), gd = (g - medianG) * (g - medianG), bd = (b - medianB) * (b - medianB);
                 stdR += rd;
                 stdG += gd;
                 stdB += bd;
-
-                if (rd + gd + bd > DOMINANT_MAXDIFF) {
-                    continue;
-                }
-
-                domR += r;
-                domG += g;
-                domB += b;
-                dominantCount++;
             }
         }
 
@@ -77,18 +101,18 @@ public class BlockColorEntry {
                 Math.sqrt((double) stdB / ((double) (width * height))) / 255d
         );
 
-        hasDominant = dominantCount > width * height * DOMINANT_PERCENTAGE / 100;
-        this.dominant = new Vec3d(
-                ((double) domR / ((double) dominantCount)) / 255d,
-                ((double) domG / ((double) dominantCount)) / 255d,
-                ((double) domB / ((double) dominantCount)) / 255d
-        );
+        if (this.median.length() == 0 || this.average.length() == 0) this.hasDominant = true;
+        else this.hasDominant = this.stddev.length() < 0.25 && this.median.dotProduct(this.average) / (this.median.length() * this.average.length()) > 0.99;
 
-        //System.out.println(block.getName() + " colors: " + averageColor() + (hasDominant ? ", " + dominantColor() : "") + " (" + dominantCount + ")");
+        this.dominant = this.average.add(this.median).multiply(0.5);
     }
 
     public Vec3d averageColor() {
         return average;
+    }
+
+    public Vec3d medianColor() {
+        return median;
     }
 
     public Vec3d dominantColor() {
@@ -144,39 +168,6 @@ public class BlockColorEntry {
     }
 
     private static Vec3d features(Vec3d color) {
-        /*
-        double max, min, diff, inc;
-        if (color.x > color.y && color.x > color.z) {
-            max = color.x;
-            min = Math.min(color.y, color.z);
-            diff = color.y - color.z;
-            inc = 0;
-        } else if (color.y > color.x && color.y > color.z) {
-            max = color.y;
-            min = Math.min(color.x, color.z);
-            diff = color.z - color.x;
-            inc = 2;
-        } else {
-            max = color.z;
-            min = Math.min(color.x, color.y);
-            diff = color.x - color.y;
-            inc = 4;
-        }
-        double l = (max + min) / 2;
-        if (max == min) {
-            return new Vec3d(0, 0, l);
-        } else {
-            double h = (inc + diff / (max - min)) / 6;
-            double s = l <= 0.5 ? (max - min) / (max + min) : (max - min) / (2 - max - min);
-            if (h < 0) h += 1;
-            return new Vec3d(h, s, l);
-        }
-        */
-        //double y = (color.x + color.y + color.z) / 3d;
-        //double a = (color.z - y) / 2d;
-        //double c = (color.x - y) / 2d;
-        //double b = (y - 0.5d) / 9d;
-        //return new Vec3d(a, b, c);
         return new Vec3d(color.x, color.y, color.z);
     }
 
@@ -186,6 +177,10 @@ public class BlockColorEntry {
 
     public AbstractTexture getTexture(int offset) {
         return textures.get(offset % textures.size());
+    }
+
+    public SpriteContents getSprite(int offset) {
+        return sprites.get(offset % sprites.size());
     }
 
     public boolean tryMerge(BlockColorEntry other) {
@@ -201,16 +196,15 @@ public class BlockColorEntry {
                 } else {
                     this.blocks.put(block, null);
                 }
+                this.sprites.addAll(other.sprites);
                 this.textures.addAll(other.textures);
             }
-            // System.out.println("Merging " + this + " and " + other + ": " + this.blocks);
             return true;
         }
     }
 
     public boolean isSimilar(BlockColorEntry other) {
-        // return other.averageColor().distanceTo(this.averageColor()) < 0.004 && (this.hasDominant == other.hasDominant) && (!this.hasDominant || other.dominantColor().distanceTo(this.dominantColor()) < 0.004);
-        return other.averageColor().distanceTo(this.averageColor()) < 0.02 && other.stddev.distanceTo(this.stddev) < 0.02;
+        return other.averageColor().distanceTo(this.averageColor()) < 0.015 && other.medianColor().distanceTo(this.medianColor()) < 0.03 && other.stddev.distanceTo(this.stddev) < 0.04;
     }
 
     /*

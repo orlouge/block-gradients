@@ -2,6 +2,7 @@ package io.github.orlouge.blockgradients;
 
 import java.lang.reflect.Array;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.stream.IntStream;
 
 public class DAG {
@@ -55,6 +56,10 @@ public class DAG {
     }
 
     public static <T> List<Node<T>> shortestPath(List<Node<T>> toposorted, int sourceId, int destId, int maxId) {
+        return shortestPath(toposorted, sourceId, destId, maxId, (node, edge) -> edge.weight);
+    }
+
+    public static <T> List<Node<T>> shortestPath(List<Node<T>> toposorted, int sourceId, int destId, int maxId, BiFunction<DAG.Node<T>, DAG.Edge<T>, Double> weightFunction) {
         if (toposorted.size() == 0) return Collections.emptyList();
         double[] cost = new double[maxId + 1];
         Arrays.fill(cost, Double.POSITIVE_INFINITY);
@@ -62,9 +67,9 @@ public class DAG {
         Node<T>[] parent = (Node<T>[]) Array.newInstance(toposorted.get(0).getClass(), maxId + 1);
         for (Node<T> node : toposorted) {
             for (Edge<T> edge : node.edges.values()) {
-                //if (edge.dest.id == destId) System.out.println(node.element + " -> " + edge.dest.element + " " + cost[edge.dest.id] + " <> " + cost[node.id] + " + " + edge.weight);
-                if (cost[edge.dest.id] > cost[node.id] + edge.weight) {
-                    cost[edge.dest.id] = cost[node.id] + edge.weight;
+                double weight = weightFunction.apply(node, edge);
+                if (cost[edge.dest.id] > cost[node.id] + weight) {
+                    cost[edge.dest.id] = cost[node.id] + weight;
                     parent[edge.dest.id] = node;
                 }
             }

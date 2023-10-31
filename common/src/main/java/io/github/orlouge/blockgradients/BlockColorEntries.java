@@ -8,6 +8,7 @@ import net.minecraft.client.render.model.BakedModelManager;
 import net.minecraft.client.render.model.BakedQuad;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.Sprite;
+import net.minecraft.client.texture.SpriteContents;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.math.Direction;
@@ -88,12 +89,6 @@ public class BlockColorEntries {
                 block instanceof OperatorBlock ||
                 blacklistMatcher.matches()
         ) {
-            /*
-            if (state.getRenderType() != BlockRenderType.MODEL) System.out.println(block.getName() + " not a model");
-            else if (state.hasSidedTransparency() || !state.isOpaque()) System.out.println(block.getName() + " not opaque");
-            else if (blacklistMatcher.matches()) System.out.println(block.getName() + " blacklisted identifier");
-            else System.out.println(block.getName() + " blacklisted class");
-            */
             return List.of();
         }
 
@@ -122,14 +117,13 @@ public class BlockColorEntries {
         }
 
         for (Map.Entry<Sprite, Direction> spriteDir : sprites.entrySet()) {
-            NativeImage image = ((SpriteContentsAccessor) spriteDir.getKey().getContents()).getMipmapLevelsImages()[0];
-            //if (image.getFormat() != NativeImage.Format.RGBA) System.out.println(block.getName() + " format " + image.getFormat().name());
+            SpriteContents contents = spriteDir.getKey().getContents();
+            NativeImage image = ((SpriteContentsAccessor) contents).getMipmapLevelsImages()[0];
             if (image.getFormat() == NativeImage.Format.RGBA) {
-                blockColors.add(new BlockColorEntry(block, image, sprites.size() == 1 ? null : spriteDir.getValue()));
+                blockColors.add(new BlockColorEntry(block, contents, sprites.size() == 1 ? null : spriteDir.getValue()));
             }
         }
 
-        //if (blockColors.size() != 1) System.out.println("Block " + block + " color entries " + blockColors);
         return blockColors;
     }
 }

@@ -1,11 +1,15 @@
 package io.github.orlouge.blockgradients;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import io.github.orlouge.blockgradients.mixin.SpriteContentsAccessor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.render.*;
 import net.minecraft.client.texture.AbstractTexture;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.client.texture.SpriteContents;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.OrderedText;
@@ -22,7 +26,7 @@ import java.util.stream.IntStream;
 
 public class BlockMapScreen extends Screen {
     private final GradientMap averageBlockMap, dominantBlockMap;
-    private int offsetX = 0, offsetY = 0, previousOffsetX = 0, previousOffsetY = 0, size = 16, previousSize = -1;
+    private int offsetX = 0, offsetY = 0, previousOffsetX = 0, previousOffsetY = 0, size = 16, previousSize = -1, maxColumns = 1;
     private boolean resetSize = true, renderAverage = true;
     private float textureOffset = 0;
 
@@ -36,16 +40,16 @@ public class BlockMapScreen extends Screen {
     public static void openBlockMap(MinecraftClient mc) {
         ItemStack main = mc.player.getMainHandStack(), off = mc.player.getOffHandStack();
         if (!(main.getItem() instanceof BlockItem destBlock)) {
-            mc.player.sendMessage(Text.of(main.getItem().getName() + " is not a block"), true);
+            mc.player.sendMessage(Text.of(main.getItem().getName().asTruncatedString(30) + " is not a block"), true);
         } else if (!(off.getItem() instanceof BlockItem sourceBlock)) {
-            mc.player.sendMessage(Text.of(off.getItem().getName() + " is not a block"), true);
+            mc.player.sendMessage(Text.of(off.getItem().getName().asTruncatedString(30) + " is not a block"), true);
         } else {
             BlockColorEntry source = BlockColorEntries.getEntry(sourceBlock.getBlock());
             BlockColorEntry dest = BlockColorEntries.getEntry(destBlock.getBlock());
             if (source == null) {
-                mc.player.sendMessage(Text.of(sourceBlock.getBlock().getName() + " is translucent or blacklisted"), true);
+                mc.player.sendMessage(Text.of(sourceBlock.getBlock().getName().asTruncatedString(30) + " is translucent or blacklisted"), true);
             } else if (dest == null) {
-                mc.player.sendMessage(Text.of(destBlock.getBlock().getName() + " is translucent or blacklisted"), true);
+                mc.player.sendMessage(Text.of(destBlock.getBlock().getName().asTruncatedString(30) + " is translucent or blacklisted"), true);
             } else {
                 GradientMap averageBlockMap = GradientMap.build(BlockColorEntries.getEntries(), source, dest, false);
                 GradientMap dominantBlockMap = GradientMap.build(BlockColorEntries.getEntries(), source, dest, true);
@@ -62,7 +66,7 @@ public class BlockMapScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
-        textureOffset += 0.05;
+        textureOffset += 0.03;
     }
 
     @Override
@@ -74,7 +78,7 @@ public class BlockMapScreen extends Screen {
             } else {
                 this.setSize(width / (5 + IntStream.range(0, 10).map(y -> dominantBlockMap.getRow(y).size()).max().orElse(0)));
             }
-            offsetY += 20;
+            offsetY += 15;
             offsetX += 5;
             this.resetSize = false;
         }
@@ -107,20 +111,34 @@ public class BlockMapScreen extends Screen {
         for (int gy = (-offsetY + height) / size; gy >= -offsetY / size; gy--) {
             for (GradientMap.Cell cell : blockMap.getRow(gy)) {
                 int gx = cell.cellX;
+                maxColumns = Math.max(gx, maxColumns);
                 BlockColorEntry entry = cell.entry;
                 if (entry != null) {
                     int x = offsetX + gx * size, y = offsetY + gy * size;
                     if (x > -size && y > -size && x < width && y < height) {
-                        setShaderTexture(0, entry.getTexture(gy + (int) textureOffset));
-                        //context.drawTexture(x, y, 0, 0, size, size, size, size);
+                        int spriteIndex = gy + (int) textureOffset;
+                        SpriteContentsAccessor sprite = (SpriteContentsAccessor) entry.getSprite(spriteIndex);
+                        SpriteContents.Animation animation = sprite.getAnimation();
+                        NativeImage image = sprite.getMipmapLevelsImages()[0];
+                        setShaderTexture(0, entry.getTexture(spriteIndex));
+                        float u = 0, v = 0, udiff = 1, vdiff = 1;
+                        if (animation != null && image != null) {
+                            udiff = (float) sprite.getWidth() / image.getWidth();
+                            vdiff = (float) sprite.getHeight() / image.getHeight();
+                            List<SpriteContents.AnimationFrame> frames = animation.frames;
+                            int frameIdx = (int) ((textureOffset - (int) textureOffset) * frames.size());
+                            frameIdx = frames.get(frameIdx).index;
+                            u = animation.getFrameX(frameIdx) * udiff;
+                            v = animation.getFrameY(frameIdx) * vdiff;
+                        }
                         RenderSystem.setShader(GameRenderer::getPositionTexProgram);
                         Matrix4f posMatrix = context.getMatrices().peek().getPositionMatrix();
                         BufferBuilder bufferBuilder = Tessellator.getInstance().getBuffer();
                         bufferBuilder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
-                        bufferBuilder.vertex(posMatrix, x, y, 0).texture(0, 0).next();
-                        bufferBuilder.vertex(posMatrix, x, y + size, 0).texture(0, 1).next();
-                        bufferBuilder.vertex(posMatrix, x + size, y + size, 0).texture(1, 1).next();
-                        bufferBuilder.vertex(posMatrix, x + size, y, 0).texture(1, 0).next();
+                        bufferBuilder.vertex(posMatrix, x, y, 0).texture(u, v).next();
+                        bufferBuilder.vertex(posMatrix, x, y + size, 0).texture(u, v + vdiff).next();
+                        bufferBuilder.vertex(posMatrix, x + size, y + size, 0).texture(u + udiff, v + vdiff).next();
+                        bufferBuilder.vertex(posMatrix, x + size, y, 0).texture(u + udiff, v).next();
                         BufferRenderer.drawWithGlobalProgram(bufferBuilder.end());
                         if (mouseX >= x && mouseY >= y && mouseX < x + size && mouseY < y + size) {
                             selectedEntry = entry;
@@ -164,25 +182,14 @@ public class BlockMapScreen extends Screen {
 
     private static void setShaderTexture(int i, AbstractTexture texture) {
         RenderSystem.setShaderTexture(i, texture.getGlId());
-        /*
-        int[] shaderTextures = RenderSystem.shaderTextures;
-        if (i >= 0 && i < shaderTextures.length) {
-            if (!RenderSystem.isOnRenderThread()) {
-                RenderSystem.recordRenderCall(() -> {
-                    shaderTextures[i] = texture.getGlId();
-                });
-            } else {
-                shaderTextures[i] = texture.getGlId();
-            }
-        }
-
-         */
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         offsetX += (int) deltaX;
         offsetY += (int) deltaY;
+        offsetX = Math.min(5, Math.max(- maxColumns * size + width, offsetX));
+        offsetY = Math.min(15, offsetY);
         return true;
     }
 
@@ -199,6 +206,8 @@ public class BlockMapScreen extends Screen {
         }
         offsetX = (offsetX - (int) mouseX) * this.size / oldSize + (int) mouseX;
         offsetY = (offsetY - (int) mouseY) * this.size / oldSize + (int) mouseY;
+        offsetX = Math.min(5, Math.max(- maxColumns * size + width, offsetX));
+        offsetY = Math.min(15, offsetY);
         return true;
     }
 

@@ -1,1 +1,7 @@
 accessWidener   v2  named
+accessible class net/minecraft/client/texture/SpriteContents$Animation
+accessible method net/minecraft/client/texture/SpriteContents$Animation getFrameX (I)I
+accessible method net/minecraft/client/texture/SpriteContents$Animation getFrameY (I)I
+accessible field net/minecraft/client/texture/SpriteContents$Animation frames Ljava/util/List;
+accessible class net/minecraft/client/texture/SpriteContents$AnimationFrame
+accessible field net/minecraft/client/texture/SpriteContents$AnimationFrame index I
