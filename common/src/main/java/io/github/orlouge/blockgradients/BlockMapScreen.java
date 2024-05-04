@@ -82,7 +82,7 @@ public class BlockMapScreen extends Screen {
             offsetX += 5;
             this.resetSize = false;
         }
-        this.renderBackground(context);
+        this.renderBackground(context, mouseX, mouseY, delta);
         this.renderBlockMap(context, this.renderAverage ? averageBlockMap : dominantBlockMap, mouseX, mouseY);
     }
 
@@ -194,12 +194,12 @@ public class BlockMapScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         // return super.mouseScrolled(mouseX, mouseY, amount);
         int oldSize = this.size;
-        if (amount > 0) {
+        if (verticalAmount > 0) {
             this.setSize(oldSize + 1 + oldSize / 8);
-        } else if (amount < 0) {
+        } else if (verticalAmount < 0) {
             this.setSize(oldSize - 1 - oldSize / 8);
         } else {
             return true;
