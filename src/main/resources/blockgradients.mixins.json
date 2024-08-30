@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "io.github.orlouge.blockgradients.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"SpriteContentsAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
