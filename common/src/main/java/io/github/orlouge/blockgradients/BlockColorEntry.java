@@ -2,11 +2,11 @@ package io.github.orlouge.blockgradients;
 
 import io.github.orlouge.blockgradients.mixin.SpriteContentsAccessor;
 import com.mojang.blaze3d.platform.NativeImage;
-import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.SpriteContents;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.ARGB;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.Vec3;
 
@@ -18,14 +18,15 @@ public class BlockColorEntry {
     public final boolean hasDominant;
     private final Map<Block, Set<Direction>> blocks =
             new TreeMap<>(Comparator.comparing(block -> block.getName().getString().length()));
-    private final List<AbstractTexture> textures;
     private final List<SpriteContents> sprites;
+    private final List<TextureAtlasSprite> atlasSprites;
 
-    public BlockColorEntry(Block block, SpriteContents spriteContents, Direction direction) {
+    public BlockColorEntry(Block block, TextureAtlasSprite atlasSprite, Direction direction) {
         this.blocks.put(block, direction != null ? new TreeSet<>(List.of(direction)) : null);
+        SpriteContents spriteContents = atlasSprite.contents();
         this.sprites = new ArrayList<>(List.of(spriteContents));
+        this.atlasSprites = new ArrayList<>(List.of(atlasSprite));
         NativeImage image = ((SpriteContentsAccessor) spriteContents).getMipmapLevelsImages()[0];
-        this.textures = new ArrayList<>(List.of(new DynamicTexture(image)));
         int width = image.getWidth(), height = image.getHeight();
         int[] histoR = new int[256], histoG = new int[256], histoB = new int[256];
 
@@ -33,10 +34,8 @@ public class BlockColorEntry {
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int r = image.getRedOrLuminance(x, y), g = image.getGreenOrLuminance(x, y), b = image.getBlueOrLuminance(x, y);
-                r = r >= 0 ? r : 256 + r;
-                g = g >= 0 ? g : 256 + g;
-                b = b >= 0 ? b : 256 + b;
+                int pixel = image.getPixel(x, y);
+                int r = ARGB.red(pixel), g = ARGB.green(pixel), b = ARGB.blue(pixel);
                 avgR += r;
                 avgG += g;
                 avgB += b;
@@ -83,10 +82,8 @@ public class BlockColorEntry {
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int r = image.getRedOrLuminance(x, y), g = image.getGreenOrLuminance(x, y), b = image.getBlueOrLuminance(x, y);
-                r = r >= 0 ? r : 256 + r;
-                g = g >= 0 ? g : 256 + g;
-                b = b >= 0 ? b : 256 + b;
+                int pixel = image.getPixel(x, y);
+                int r = ARGB.red(pixel), g = ARGB.green(pixel), b = ARGB.blue(pixel);
                 int rd = (r - medianR) * (r - medianR), gd = (g - medianG) * (g - medianG), bd = (b - medianB) * (b - medianB);
                 stdR += rd;
                 stdG += gd;
@@ -174,8 +171,8 @@ public class BlockColorEntry {
         return this.blocks;
     }
 
-    public AbstractTexture getTexture(int offset) {
-        return textures.get(offset % textures.size());
+    public TextureAtlasSprite getAtlasSprite(int offset) {
+        return atlasSprites.get(offset % atlasSprites.size());
     }
 
     public SpriteContents getSprite(int offset) {
@@ -196,7 +193,7 @@ public class BlockColorEntry {
                     this.blocks.put(block, null);
                 }
                 this.sprites.addAll(other.sprites);
-                this.textures.addAll(other.textures);
+                this.atlasSprites.addAll(other.atlasSprites);
             }
             return true;
         }

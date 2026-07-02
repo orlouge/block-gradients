@@ -3,11 +3,12 @@ package io.github.orlouge.blockgradients;
 import io.github.orlouge.blockgradients.mixin.SpriteContentsAccessor;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelManager;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
@@ -88,7 +89,7 @@ public class BlockColorEntries {
         if (
                 state.getRenderShape() != RenderShape.MODEL ||
                 state.useShapeForLightOcclusion() ||
-                !state.isSolidRender(null, null) ||
+                !state.isSolidRender() ||
                 block instanceof FenceBlock ||
                 block instanceof FenceGateBlock ||
                 block instanceof InfestedBlock ||
@@ -110,11 +111,13 @@ public class BlockColorEntries {
             if (state.skipRendering(state, direction)) {
                 continue;
             }
-            BakedModel model = modelManager.getBlockModelShaper().getBlockModel(state);
-            List<BakedQuad> quads = model.getQuads(state, direction, client.level.getRandom());
+            BlockStateModel model = modelManager.getBlockStateModelSet().get(state);
+            List<BlockStateModelPart> parts = new ArrayList<>();
+            model.collectParts(client.level.getRandom(), parts);
+            List<BakedQuad> quads = parts.stream().flatMap(part -> part.getQuads(direction).stream()).toList();
             if (quads.size() == 1) {
                 for (BakedQuad quad : quads) {
-                    TextureAtlasSprite sprite = quad.getSprite();
+                    TextureAtlasSprite sprite = quad.materialInfo().sprite();
                     if (sprite.contents().width() < 16 || sprite.contents().height() < 16) continue;
                     if (sprites.containsKey(sprite)) {
                         sprites.put(sprite, direction);
@@ -129,7 +132,7 @@ public class BlockColorEntries {
             SpriteContents contents = spriteDir.getKey().contents();
             NativeImage image = ((SpriteContentsAccessor) contents).getMipmapLevelsImages()[0];
             if (image.format() == NativeImage.Format.RGBA) {
-                blockColors.add(new BlockColorEntry(block, contents, sprites.size() == 1 ? null : spriteDir.getValue()));
+                blockColors.add(new BlockColorEntry(block, spriteDir.getKey(), sprites.size() == 1 ? null : spriteDir.getValue()));
             }
         }
 

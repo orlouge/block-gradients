@@ -10,7 +10,7 @@ import net.neoforged.bus.api.IEventBus;
 @Mod(Constants.MOD_ID)
 public class BlockGradientsMod {
     public BlockGradientsMod(IEventBus eventBus, ModContainer container) {
-        if (FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
             BlockGradientsClientMod.init(eventBus);
         }
     }

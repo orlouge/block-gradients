@@ -9,7 +9,7 @@ import org.gradle.internal.resource.StringTextResource;
  **/
 @SuppressWarnings("DefaultPackage")
 public class MultiloaderLoaderPlugin implements org.gradle.api.Plugin<org.gradle.api.internal.project.ProjectInternal> {
-    private static final String MIN_SUPPORTED_GRADLE_VERSION = "5.0";
+    private static final String MIN_SUPPORTED_GRADLE_VERSION = "7.0";
     @Override
     public void apply(org.gradle.api.internal.project.ProjectInternal target) {
         assertSupportedByCurrentGradleVersion();
@@ -36,7 +36,7 @@ public class MultiloaderLoaderPlugin implements org.gradle.api.Plugin<org.gradle
   }
   private static void assertSupportedByCurrentGradleVersion() {
       if (GradleVersion.current().getBaseVersion().compareTo(GradleVersion.version(MIN_SUPPORTED_GRADLE_VERSION)) < 0) {
-          throw new RuntimeException("Precompiled Groovy script plugins require Gradle "+MIN_SUPPORTED_GRADLE_VERSION+" or higher");
+          throw new RuntimeException("Precompiled Groovy script plugins built by Gradle 9.5.0 require Gradle "+MIN_SUPPORTED_GRADLE_VERSION+" or higher");
       }
   }
 }
